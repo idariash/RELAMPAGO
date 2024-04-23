@@ -2551,7 +2551,7 @@ def rhi_drops_1b_4plots_vel(filename_1a, filename_1b, sweep):
             gatefilter = gatefilter_1a, nyquist_vel=nyq, centered = True)
     radar_1a.add_field('corrected_velocity', corr_vel, replace_existing = True)
     
-    radar_1a.fields['corrected_velocity']['data'] = (radar_1a.fields['corrected_velocity']['data'] + 1*nyq)
+    radar_1a.fields['corrected_velocity']['data'] = (radar_1a.fields['corrected_velocity']['data'])# + 1*nyq)
    
     # corr_vel_2nd_time = pyart.correct.dealias_fourdd(
     #         radar_1a, last_radar = last_radar, gatefilter = gatefilter_1a)
