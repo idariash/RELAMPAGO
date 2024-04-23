@@ -1,0 +1,1 @@
+/net/k2/storage/people/idariash/home/CSU/RELAMPAGO/analysis/Dec14/dda_3radars_20181214_0230.nc

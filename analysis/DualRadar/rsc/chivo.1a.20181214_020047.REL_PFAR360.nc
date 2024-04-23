@@ -1,0 +1,1 @@
+/net/k2/storage/people/idariash/home/CSU/RELAMPAGO/analysis/DualRadar/rsc/chivo.1a.20181214_020047.REL_PFAR360.nc

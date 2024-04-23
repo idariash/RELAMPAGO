@@ -1,0 +1,1 @@
+/net/k2/storage/projects/RELAMPAGO/quality_controlled_data/level_1b.2/chivo.1b.20181214_050049.REL_PNL360A.nc

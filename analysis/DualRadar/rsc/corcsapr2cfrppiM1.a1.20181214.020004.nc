@@ -1,0 +1,1 @@
+/net/k2/storage/people/idariash/home/CSU/RELAMPAGO/analysis/DualRadar/rsc/corcsapr2cfrppiM1.a1.20181214.020004.nc

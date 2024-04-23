@@ -1,0 +1,1 @@
+/net/k2/storage/people/idariash/home/CSU/RELAMPAGO/analysis/Mountain/terr.nc

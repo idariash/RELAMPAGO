@@ -1,0 +1,1 @@
+/net/k2/storage/people/idariash/home/CSU/RELAMPAGO/analysis/Dec14/chivo_1b.2_20181214_0200.nc

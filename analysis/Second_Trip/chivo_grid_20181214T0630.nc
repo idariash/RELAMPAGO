@@ -1,0 +1,1 @@
+/net/k2/storage/people/idariash/home/CSU/RELAMPAGO/analysis/Second_Trip/chivo_grid_20181214T0630.nc

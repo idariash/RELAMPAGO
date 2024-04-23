@@ -1,0 +1,1 @@
+/net/k2/storage/people/idariash/home/CSU/RELAMPAGO/analysis/Dec14/chivo_1b_whitney_20181214_0230.nc

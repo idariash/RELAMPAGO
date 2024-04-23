@@ -1,0 +1,562 @@
+% Ivan Arias
+% Oct. 21, 2021
+
+% Code to compute dual radar attenuation equations
+
+%% Equations, here we go:
+
+addpath /net/k2/storage/people/idariash/home/Utiles/PPI_Plotting
+addpath /net/k2/storage/people/idariash/home/Utiles/Matlab
+
+n = 1;
+ref_threshold = 20;
+attenuation_threshold = 0;
+d_increment = 0.050;
+angle_forDataSeleccion = 5;
+
+% Read data
+chivo_corrected_file = './grided_data/20181214_0200/chivo_att_corrected_2018-12-14T02_00.nc';
+chivo_original_file = './grided_data/20181214_0200/chivo_original_2018-12-14T0200.nc';
+csapr_corrected_file = './grided_data/20181214_0200/csapr_att_corrected_2018-12-14T02_00.nc';
+csapr_original_file = './grided_data/20181214_0200/csapr_original_2018-12-14T02_00.nc';
+
+chivo_corrected_ref = ncread(chivo_corrected_file, 'corrected_reflectivity');
+chivo_original_ref = ncread(chivo_original_file, 'reflectivity');
+csapr_corrected_ref = ncread(csapr_corrected_file, 'corrected_reflectivity');
+csapr_original_ref = ncread(csapr_original_file, 'reflectivity');
+
+
+
+% Selecting data to process
+
+chivo_Xo = 0;
+chivo_Yo = 0;
+chivo_Zo = 0.421;
+
+csapr_Xo = -52.716;
+csapr_Yo = -54.866;
+csapr_Zo = 1.141;
+
+x = ncread(chivo_corrected_file, 'x')/1000;
+y = ncread(chivo_corrected_file, 'y')/1000;
+z = ncread(chivo_corrected_file, 'z')/1000;
+[X, Y] = meshgrid(x,y);
+[XX, YY, ZZ] = meshgrid(x,y,z);
+
+
+angle_radars = atand((csapr_Yo - chivo_Yo)/(csapr_Xo - chivo_Xo));
+m1 = tand(angle_radars + angle_forDataSeleccion);
+m2  = tand(angle_radars - angle_forDataSeleccion);
+
+% Equation of line that are in between the radars
+Y_csapr_upper = m1*X - m1*csapr_Xo + csapr_Yo;%+ 64.3460;
+Y_csapr_lower = m2*X - m2*csapr_Xo + csapr_Yo; %- 28.9877;
+
+Y_chivo_upper = m2*X;
+Y_chivo_lower = m1*X;
+
+inbetween_radars_region = Y_csapr_upper > Y & Y_csapr_lower < Y & ...
+    Y_chivo_upper > Y & Y_chivo_lower < Y; 
+
+inbetween_radar = nan(301,301,20);
+for i = 1:20
+    inbetween_radar(:,:,i) = inbetween_radars_region;
+end
+
+chivo_corrected_ref(~inbetween_radar) = nan;
+chivo_original_ref(~inbetween_radar) = nan;
+csapr_corrected_ref(~inbetween_radar) = nan;
+csapr_original_ref(~inbetween_radar) = nan;
+
+
+
+chivo_corrected_ref(chivo_corrected_ref < ref_threshold) = nan;
+chivo_original_ref(chivo_original_ref < ref_threshold) = nan;
+csapr_corrected_ref(csapr_corrected_ref < ref_threshold) = nan;
+csapr_original_ref(csapr_original_ref < ref_threshold) = nan;
+
+chivo_corrected_ref(ZZ > 5) = nan;
+chivo_original_ref(ZZ > 5) = nan;
+csapr_corrected_ref(ZZ > 5) = nan;
+csapr_original_ref(ZZ > 5) = nan;
+
+% Computing attenuation, this can give negative attenuation for some reason
+chivo_attenuation = chivo_corrected_ref - chivo_original_ref; 
+csapr_attenuation = csapr_corrected_ref - csapr_original_ref;
+% chivo_attenuation(chivo_attenuation < -0) = nan;
+% csapr_attenuation(csapr_attenuation < -0) = nan;
+
+composite_reflectivity = (chivo_corrected_ref.*csapr_attenuation + csapr_corrected_ref.*chivo_attenuation)./...
+   (csapr_attenuation + chivo_attenuation);
+
+% Variables definitions
+valid_data_number = sum(sum(sum(~isnan(composite_reflectivity))));
+Z_chivo_m = nan(valid_data_number, 1);
+Z_csapr_m = nan(valid_data_number, 1);
+Z_chivo_c = nan(valid_data_number, 1);
+Z_csapr_c = nan(valid_data_number, 1);
+
+Integral_chivo_matrix = zeros(valid_data_number, valid_data_number);
+Integral_csapr_matrix = zeros(valid_data_number, valid_data_number);
+coordinate_dictionary = nan(valid_data_number, 3);
+I = 1;
+
+% This for is to create the coordinate dictionary of the valid data
+
+for i = 1:301 % this for are itirating over the grid dimension
+    for j = 1:301
+        for k = 1:20
+            if isnan(composite_reflectivity(i,j,k))
+                continue
+            end
+            coordinate_dictionary(I, :) = [i, j, k];
+            I = I + 1;
+        end
+    end  
+end
+
+
+% For CHIVO
+equation_number = 1;
+for i = 1:301
+    for j = 1:301
+        for k = 1:20
+            if isnan(composite_reflectivity(i,j,k))
+                continue
+            end
+            disp(equation_number)
+            if chivo_attenuation(i,j,k) < attenuation_threshold
+                Z_chivo_m(equation_number) = chivo_original_ref(i, j, k);
+                Z_chivo_c(equation_number) = chivo_corrected_ref(i, j, k);
+                equation_number = equation_number + 1;
+                continue
+            end
+            d = 0;
+            Xo = X(i,j);
+            Yo = Y(i,j);
+            Zo = z(k);
+            chivo_distance = sqrt((Xo - chivo_Xo)^2 + (Yo - chivo_Yo)^2 + (Zo - chivo_Zo)^2);
+            V = ([Xo, Yo, Zo] - [chivo_Xo, chivo_Yo, chivo_Zo])/chivo_distance; % Normalized line generator vector
+            L_ijk = 0;
+            v = d*V + [chivo_Xo, chivo_Yo, chivo_Zo]; % Line equation between CHIVO and the grid gate
+            
+            while v(3) < 0.500
+                d = d + d_increment;
+                v = d*V + [chivo_Xo, chivo_Yo, chivo_Zo]; % Line equation between CHIVO and the grid gate
+            end 
+            Do = d;
+            gate_ijk = find_centroid_coordiante(v, X, Y, z);
+            while d < chivo_distance
+                d = d + d_increment;
+                L_ijk = L_ijk + d_increment;
+                v = d*V + [chivo_Xo, chivo_Yo, chivo_Zo]; % Line equation between CHIVO and the grid gate
+                gate_ijk_increment = find_centroid_coordiante(v, X, Y, z);
+                if ~prod(gate_ijk == gate_ijk_increment) % if they are different, when exiting a gate
+                    if ~isnan(composite_reflectivity(gate_ijk(1), gate_ijk(2), gate_ijk(3)))
+                        alpha_index = find(coordinate_dictionary(:,1) == gate_ijk(1) & ...
+                            coordinate_dictionary(:,2) == gate_ijk(2) & ...
+                            coordinate_dictionary(:,3) == gate_ijk(3));
+                        Integral_chivo_matrix(equation_number, alpha_index) = L_ijk;
+                    end
+                    gate_ijk = gate_ijk_increment;
+                    L_ijk = 0;
+                end              
+            end
+            alpha_index = find(coordinate_dictionary(:,1) == gate_ijk(1) & ...
+                    coordinate_dictionary(:,2) == gate_ijk(2) & ...
+                    coordinate_dictionary(:,3) == gate_ijk(3));
+            Integral_chivo_matrix(equation_number, alpha_index) = L_ijk;
+            Z_chivo_m(equation_number) = chivo_original_ref(i, j, k);
+            equation_number = equation_number + 1;
+     
+        end
+    end    
+end
+
+% For CSAPR
+equation_number = 1;
+for i = 1:301
+    for j = 1:301
+        for k = 1:20
+            if isnan(composite_reflectivity(i,j,k))
+                continue
+            end
+            disp(equation_number);
+            if csapr_attenuation(i,j,k) < attenuation_threshold
+                Z_csapr_m(equation_number) = csapr_corrected_ref(i, j, k);
+                equation_number = equation_number + 1;
+                continue
+            end
+            d = 0;
+            Xo = X(i,j);
+            Yo = Y(i,j);
+            Zo = z(k);
+            csapr_distance = sqrt((Xo - csapr_Xo)^2 + (Yo - csapr_Yo)^2 + (Zo - csapr_Zo)^2);
+            V = ([Xo, Yo, Zo] - [csapr_Xo, csapr_Yo, csapr_Zo])/csapr_distance; % Normalized line generator vector
+            L_ijk = 0;
+            v = d*V + [csapr_Xo, csapr_Yo, csapr_Zo]; % Line equation between CHIVO and the grid gate
+            
+            gate_ijk = find_centroid_coordiante(v, X, Y, z);
+            while d < csapr_distance
+                d = d + d_increment;
+                L_ijk = L_ijk + d_increment;
+                v = d*V + [csapr_Xo, csapr_Yo, csapr_Zo]; % Line equation between CHIVO and the grid gate
+                gate_ijk_increment = find_centroid_coordiante(v, X, Y, z);
+                if ~prod(gate_ijk == gate_ijk_increment) % if they are different, when exiting a gate
+                    if ~isnan(composite_reflectivity(gate_ijk(1), gate_ijk(2), gate_ijk(3)))
+                        alpha_index = find(coordinate_dictionary(:,1) == gate_ijk(1) & ...
+                            coordinate_dictionary(:,2) == gate_ijk(2) & ...
+                            coordinate_dictionary(:,3) == gate_ijk(3));
+                        Integral_csapr_matrix(equation_number, alpha_index) = L_ijk;
+                    end
+                    gate_ijk = gate_ijk_increment;
+                    L_ijk = 0;
+                end              
+            end
+            alpha_index = find(coordinate_dictionary(:,1) == gate_ijk(1) & ...
+                    coordinate_dictionary(:,2) == gate_ijk(2) & ...
+                    coordinate_dictionary(:,3) == gate_ijk(3));
+            Integral_csapr_matrix(equation_number, alpha_index) = L_ijk;
+            
+            Z_csapr_m(equation_number) = csapr_original_ref(i, j, k);
+            equation_number = equation_number + 1;
+        end
+    end
+end
+ 
+A = 2*(Integral_csapr_matrix - Integral_chivo_matrix);
+B = Z_chivo_m - Z_csapr_m;
+
+return
+
+
+%%
+
+a = sum(abs(A));
+aa = sum(abs(A),2);
+
+b = find(a == 0);
+bb = find(aa == 0);
+
+c = B(b);
+cc = B(bb);
+
+figure
+hist(c)
+figure
+hist(cc)
+
+imagesc(composite_reflectivity(:,:,2)')
+
+%%
+level = 2
+
+chivo_corrected_ref(chivo_corrected_ref < 30) = nan;
+
+figure
+pcolor(X,Y,composite_reflectivity(:,:,level)')
+h = colorbar
+h.Limits = [0 70];
+shading flat
+xlim([-30,0])
+ylim([-30,0])
+
+figure
+pcolor(X,Y,chivo_corrected_ref(:,:,level)')
+h = colorbar
+h.Limits = [0 70];
+shading flat
+xlim([-30,0])
+ylim([-30,0])
+
+
+csapr_corrected_ref = ncread(csapr_corrected_file, 'corrected_reflectivity');
+csapr_corrected_ref(csapr_corrected_ref < 30) = nan;
+figure
+pcolor(X,Y,csapr_corrected_ref(:,:,level)')
+h = colorbar
+h.Limits = [0 70]
+shading flat
+xlim([-30,0])
+ylim([-30,0])
+
+ref_diff = chivo_corrected_ref(:,:,level) - csapr_corrected_ref(:,:,2);
+figure
+pcolor(X,Y,ref_diff')
+h = colorbar
+h.Limits = [-10 10]
+shading flat
+xlim([-30,0])
+ylim([-30,0])
+cmocean('curl')
+
+chivo_ref_level = chivo_corrected_ref(:,:,level);
+csapr_ref_level = csapr_corrected_ref(:,:,level);
+composite_reflectivity_level = composite_reflectivity(:,:, level);
+
+chivo_ref_level(isnan(composite_reflectivity_level)) = nan;
+csapr_ref_level(isnan(composite_reflectivity_level)) = nan;
+
+chivo_ref_level = reshape(chivo_ref_level, 1, 301*301);
+csapr_ref_level = reshape(csapr_ref_level, 1, 301*301);
+
+figure
+scatter(chivo_ref_level, csapr_ref_level);
+
+%%
+n = 1;
+ref_threshold = 35;
+
+chivo_corrected_file = './grided_data/20181214_0200/chivo_att_corrected_2018-12-14T02_00.nc';
+chivo_original_file = './grided_data/20181214_0200/chivo_original_2018-12-14T0200.nc';
+csapr_corrected_file = './grided_data/20181214_0200/csapr_att_corrected_2018-12-14T02_00.nc';
+csapr_original_file = './grided_data/20181214_0200/csapr_original_2018-12-14T02_00.nc';
+
+chivo_corrected_ref = ncread(chivo_corrected_file, 'corrected_reflectivity');
+chivo_original_ref = ncread(chivo_original_file, 'reflectivity');
+csapr_corrected_ref = ncread(csapr_corrected_file, 'corrected_reflectivity');
+csapr_original_ref = ncread(csapr_original_file, 'reflectivity');
+
+chivo_corrected_ref(chivo_corrected_ref < ref_threshold) = nan;
+chivo_original_ref(chivo_original_ref < ref_threshold) = nan;
+csapr_corrected_ref(csapr_corrected_ref < ref_threshold) = nan;
+csapr_original_ref(csapr_original_ref < ref_threshold) = nan;
+
+chivo_attenuation = chivo_corrected_ref - chivo_original_ref; 
+csapr_attenuation = csapr_corrected_ref - csapr_original_ref;
+% chivo_attenuation(chivo_attenuation < -0) = nan;
+% csapr_attenuation(csapr_attenuation < -0) = nan;
+
+composite_reflectivity = (chivo_corrected_ref.*csapr_attenuation + csapr_corrected_ref.*chivo_attenuation)./...
+   (csapr_attenuation + chivo_attenuation);
+
+x = ncread(chivo_corrected_file, 'x')/1000;
+y = ncread(chivo_corrected_file, 'y')/1000;
+[X, Y] = meshgrid(x,y);
+
+Y_csapr_upper = 2.1445*X + 61.8030;
+Y_csapr_lower = 0.4663*X - 28.8198;
+
+Y_chivo_upper = 0.4663*X;
+Y_chivo_lower = 2.1450*X;
+
+inbetween_radars_region = Y_csapr_upper > Y & Y_csapr_lower < Y & ...
+    Y_chivo_upper > Y & Y_chivo_lower < Y; 
+ 
+composite_reflectivity_n = composite_reflectivity(:,:,n);
+composite_reflectivity_n(~inbetween_radars_region) = nan;
+
+figure
+pcolor(x, y, composite_reflectivity_n')
+shading flat
+xlim([-60 0])
+ylim([-60 0])
+hc=colorbar;
+caxis([0 70])
+colormap('jet')
+
+figure
+imagesc(composite_reflectivity_n')
+
+figure
+imagesc(Y)
+
+
+%%
+
+ref_threshold = 35;
+n = 1;
+chivo_corrected_file = './grided_data/20181214_0200/chivo_att_corrected_2018-12-14T02_00.nc';
+chivo_original_file = './grided_data/20181214_0200/chivo_original_2018-12-14T0200.nc';
+csapr_corrected_file = './grided_data/20181214_0200/csapr_att_corrected_2018-12-14T02_00.nc';
+csapr_original_file = './grided_data/20181214_0200/csapr_original_2018-12-14T02_00.nc';
+
+chivo_corrected_ref = ncread(chivo_corrected_file, 'corrected_reflectivity');
+chivo_original_ref = ncread(chivo_original_file, 'reflectivity');
+csapr_corrected_ref = ncread(csapr_corrected_file, 'corrected_reflectivity');
+csapr_original_ref = ncread(csapr_original_file, 'reflectivity');
+
+chivo_corrected_ref(chivo_corrected_ref < ref_threshold) = nan;
+chivo_original_ref(chivo_original_ref < ref_threshold) = nan;
+csapr_corrected_ref(csapr_corrected_ref < ref_threshold) = nan;
+csapr_original_ref(csapr_original_ref < ref_threshold) = nan;
+
+chivo_attenuation = chivo_corrected_ref - chivo_original_ref; 
+csapr_attenuation = csapr_corrected_ref - csapr_original_ref;
+
+attenuation_min = min(csapr_attenuation, csapr_attenuation);
+
+x = ncread(chivo_corrected_file, 'x')/1000;
+y = ncread(chivo_corrected_file, 'y')/1000;
+[X, Y] = meshgrid(x,y);
+
+Y_csapr_upper = 2.1445*X + 61.8030;
+Y_csapr_lower = 0.4663*X - 28.8198;
+
+Y_chivo_upper = 0.4663*X;
+Y_chivo_lower = 2.1450*X;
+
+inbetween_radars_region = Y_csapr_upper > Y & Y_csapr_lower < Y & ...
+    Y_chivo_upper > Y & Y_chivo_lower < Y; 
+    
+chivo_attenuation_n = chivo_attenuation(:,:,n);
+csapr_attenuation_n = csapr_attenuation(:,:,n);
+attenuation_min_n = attenuation_min(:,:,n);
+attenuation_min_n(~inbetween_radars_region) = nan;
+attenuation_min_n(attenuation_min_n > 1) = nan;
+
+figure
+%pcolor(x, y, csapr_attenuation_n')
+pcolor(x, y, attenuation_min_n')
+shading flat
+xlim([-60 0])
+ylim([-60 0])
+hc=colorbar;
+caxis([-2 0])
+colormap('jet')
+
+%%
+
+chivo_corrected_file = '/top/students/GRAD/ECE/idariash/home/CSU/RELAMPAGO/analysis/Dec14/grided_data/20181214_0200/chivo_att_corrected_2018-12-14T02_00.nc';
+csapr_corrected_file = '/top/students/GRAD/ECE/idariash/home/CSU/RELAMPAGO/analysis/Dec14/grided_data/20181214_0200/csapr_att_corrected_2018-12-14T02_00.nc';
+
+
+ref_chivo = ncread(chivo_corrected_file, 'corrected_reflectivity');
+ref_csapr = ncread(csapr_corrected_file, 'corrected_reflectivity');
+x = ncread(chivo_corrected_file, 'x')/1000;
+y = ncread(chivo_corrected_file, 'y')/1000;
+
+[X, Y] = meshgrid(x,y);
+
+ref_chivo(ref_chivo < -100) = nan;
+ref_csapr(ref_csapr < -100) = nan;
+
+n = 4;
+ref_n_chivo = ref_chivo(:,:,n);
+ref_n_csapr = ref_csapr(:,:,n);
+
+% figure
+% pcolor(x, y, ref_n')
+% shading flat
+
+Y_csapr_upper = 2.1445*X + 61.8030;
+Y_csapr_lower = 0.4663*X - 28.8198;
+
+Y_chivo_upper = 0.4663*X;
+Y_chivo_lower = 2.1450*X;
+
+inbetween_radars_region = Y_csapr_upper > Y & Y_csapr_lower < Y & ...
+    Y_chivo_upper > Y & Y_chivo_lower < Y; 
+    
+
+ref_n_chivo(~inbetween_radars_region) = nan;
+ref_n_chivo(~inbetween_radars_region) = nan;
+
+[c, r] = size(ref_n_chivo) ;
+chivo_ref_vector = reshape(ref_n_chivo, 1, r*c);
+csapr_ref_vector = reshape(ref_n_csapr, 1, r*c);
+
+figure
+scatter(chivo_ref_vector, csapr_ref_vector)
+
+disp(nanmean(chivo_ref_vector - csapr_ref_vector))
+
+
+%%
+filename = '/top/students/GRAD/ECE/idariash/home/CSU/RELAMPAGO/analysis/Dec14/grided_data/20181214_0200/chivo_att_corrected_2018-12-14T02_00.nc';
+
+ref = ncread(filename, 'corrected_reflectivity');
+x = ncread(filename, 'x')/1000;
+y = ncread(filename, 'y')/1000;
+
+[X, Y] = meshgrid(x,y);
+
+ref(ref < 20) = nan;
+
+n = 1;
+ref_n = ref(:,:,n);
+
+figure
+pcolor(x, y, ref_n')
+shading flat
+xlim([-60 0])
+ylim([-60 0])
+hc=colorbar;
+caxis([0 70])
+colormap('jet')
+
+Y_csapr_upper = 2.1445*X + 61.8030;
+Y_csapr_lower = 0.4663*X - 28.8198;
+
+Y_chivo_upper = 0.4663*X;
+Y_chivo_lower = 2.1450*X;
+
+inbetween_radars_region = Y_csapr_upper > Y & Y_csapr_lower < Y & ...
+    Y_chivo_upper > Y & Y_chivo_lower < Y; 
+    
+
+ref_n(~inbetween_radars_region) = nan;
+figure
+pcolor(x, y, ref_n')
+shading flat
+xlim([-60 0])
+ylim([-60 0])
+hc=colorbar;
+caxis([0 70])
+colormap('jet')
+%hold on
+ whole
+
+%% CSAPR Ref
+
+filename = '/top/students/GRAD/ECE/idariash/home/CSU/RELAMPAGO/analysis/Dec14/grided_data/20181214_0200/csapr_att_corrected_2018-12-14T02_00.nc';
+
+ref = ncread(filename, 'corrected_reflectivity');
+x = ncread(filename, 'x')/1000;
+y = ncread(filename, 'y')/1000;
+
+[X, Y] = meshgrid(x,y);
+
+ref(ref < 20) = nan;
+
+n = 1;
+ref_n = ref(:,:,n);
+
+figure
+pcolor(x, y, ref_n')
+shading flat
+xlim([-60 0])
+ylim([-60 0])
+hc=colorbar;
+caxis([0 70])
+colormap('jet')
+
+Y_csapr_upper = 2.1445*X + 61.8030;
+Y_csapr_lower = 0.4663*X - 28.8198;
+
+Y_chivo_upper = 0.4663*X;
+Y_chivo_lower = 2.1450*X;
+
+inbetween_radars_region = Y_csapr_upper > Y & Y_csapr_lower < Y & ...
+    Y_chivo_upper > Y & Y_chivo_lower < Y; 
+    
+
+ref_n(~inbetween_radars_region) = nan;
+figure
+pcolor(x, y, ref_n')
+shading flat
+xlim([-60 0])
+ylim([-60 0])
+hc=colorbar;
+caxis([0 70])
+colormap('jet')
+%hold on
+
+
+
+function centroid_coordinate = find_centroid_coordiante(v, X, Y, z)
+    nearest_centroid = round(v);
+    [i, j] = find(X == nearest_centroid(1) & Y == nearest_centroid(2));
+    k = find(z == nearest_centroid(3));
+    centroid_coordinate = [i, j, k];
+end

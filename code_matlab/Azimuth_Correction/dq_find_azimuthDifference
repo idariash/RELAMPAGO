@@ -1,0 +1,30 @@
+% Data Quality, calculate azimuth different using fixed points azimuth
+% 2019/07/29 Ivan Arias
+
+data_path = '/net/denali/storage2/radar2/tmp/RELAMPAGO/NetCDF/20181129';
+directory = dir([data_path '/*HYDRO*']);
+
+for i =1:length(directory)
+    filename = [data_path '/' directory(i).name];
+    range = ncread(filename, 'range')/1e3; % range in km
+    azimuth = ncread(filename, 'azimuth');
+    elevation = ncread(filename, 'elevation');
+    DBZ_TOT = ncread(filename, 'DBZ_TOT');
+    VEL = ncread(filename, 'VEL');
+    RHOHV = ncread(filename, 'RHOHV');
+
+    % Sort azimuth and moments
+    azimuth = azimuth(elevation < 1); % First sweep of HYDRO
+    dbz_tot = DBZ_TOT(:, elevation < 1);
+    vel = VEL(:, elevation < 1);
+    rhohv = RHOHV(:, elevation < 1);
+    
+    [azimuth, I] = sort(azimuth);
+    dbz_tot = dbz_tot(:,I);
+    vel = vel(:, I);
+    rhohv = rhohv(:,I);
+    
+    for j = 1:length(fixedPoint_azimuthIndex) % to average
+        
+    end
+end 

@@ -1,0 +1,1 @@
+/net/k2/storage/people/idariash/home/CSU/RELAMPAGO/data_quality/level_1a/output/chivo.1a.20181129_164514.bREL_CIL360B.nc

@@ -1,0 +1,1 @@
+/net/k2/storage/people/idariash/home/CSU/RELAMPAGO/plot/cfrad.20181130_024042.935_to_20181130_024558.468_col-radar_REL_PFAR360_SUR.nc
